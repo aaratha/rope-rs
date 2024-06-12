@@ -1,7 +1,10 @@
 use macroquad::prelude::*;
+use macroquad::rand::gen_range;
 use std::time::{Duration, Instant};
 
-const NUM_PARTICLES: usize = 10;
+// web buid: "cargo build --target wasm32-unknown-unknown/target/release"
+// basic-http-server target/wasm32-unknown-unknown/release
+
 const ROPE_THICKNESS: f32 = 2.0;
 const ROPE_BALL_RADIUS: f32 = 7.0;
 const ROPE_COLOR: Color = Color::new(0.7, 0.8, 1.0, 1.0);
@@ -57,18 +60,20 @@ struct Rope {
     particles: Vec<Particle>,
     thickness: f32,
     ball_radius: f32,
+    constraint_strength: f32,
 }
 
 impl Rope {
-    fn new(start: Vec2) -> Self {
-        let mut particles = Vec::with_capacity(NUM_PARTICLES);
-        for i in 0..NUM_PARTICLES {
+    fn new(start: Vec2, num_particles: usize) -> Self {
+        let mut particles = Vec::with_capacity(num_particles);
+        for i in 0..num_particles {
             particles.push(Particle::new(start + vec2(i as f32 * SEGMENT_LENGTH, 0.0)));
         }
         Self {
             particles,
             thickness: ROPE_THICKNESS,
             ball_radius: ROPE_BALL_RADIUS,
+            constraint_strength: 0.5,
         }
     }
 
@@ -76,13 +81,13 @@ impl Rope {
         self.particles[0].position = target;
 
         for _ in 0..CONSTRAINT_ITERATIONS {
-            for i in 0..NUM_PARTICLES - 1 {
+            for i in 0..self.particles.len() - 1 {
                 let particle_a = self.particles[i];
                 let particle_b = self.particles[i + 1];
                 let delta = particle_b.position - particle_a.position;
                 let delta_length = delta.length();
                 let diff = (delta_length - SEGMENT_LENGTH) / delta_length;
-                let offset = delta * diff * 0.5 / SUBSTEPS as f32;
+                let offset = delta * diff * self.constraint_strength / SUBSTEPS as f32;
 
                 if i != 0 {
                     self.particles[i].position += offset;
@@ -91,13 +96,20 @@ impl Rope {
             }
         }
 
-        for i in 1..NUM_PARTICLES {
+        for i in 1..self.particles.len() {
             self.particles[i].update();
         }
     }
 
+    fn extend(&mut self) {
+        let last_particle = self.particles.last().unwrap();
+        let direction = last_particle.position - self.particles[self.particles.len() - 2].position;
+        let new_particle = Particle::new(last_particle.position + direction);
+        self.particles.push(new_particle);
+    }
+
     fn draw(&self) {
-        for i in 0..NUM_PARTICLES - 1 {
+        for i in 0..self.particles.len() - 1 {
             draw_line(
                 self.particles[i].position.x,
                 self.particles[i].position.y,
@@ -114,8 +126,8 @@ impl Rope {
             WHITE,
         );
         draw_circle(
-            self.particles[NUM_PARTICLES - 1].position.x,
-            self.particles[NUM_PARTICLES - 1].position.y,
+            self.particles[self.particles.len() - 1].position.x,
+            self.particles[self.particles.len() - 1].position.y,
             self.ball_radius,
             WHITE,
         );
@@ -130,10 +142,10 @@ struct Enemy {
 
 impl Enemy {
     fn new() -> Self {
-        let pos = if ::rand::random::<bool>() {
+        let pos = if gen_range(0., 1.) > 0.5 {
             // Spawn on the left or right side of the rectangle
             Vec2::new(
-                if ::rand::random::<bool>() {
+                if gen_range(0., 1.) > 0.5 {
                     (screen_width() - RECTANGLE_WIDTH) / 2.
                 } else {
                     (screen_width() + RECTANGLE_WIDTH) / 2.
@@ -150,7 +162,7 @@ impl Enemy {
                     (screen_width() - RECTANGLE_WIDTH) / 2.,
                     (screen_width() + RECTANGLE_WIDTH) / 2.,
                 ),
-                if ::rand::random::<bool>() {
+                if gen_range(0., 1.) > 0.5 {
                     (screen_height() - RECTANGLE_HEIGHT) / 2.
                 } else {
                     (screen_height() + RECTANGLE_HEIGHT) / 2.
@@ -293,12 +305,13 @@ fn is_in_frame(particle: &Particle) -> bool {
 #[macroquad::main("Rope Simulation")]
 async fn main() {
     let mut game_over = false;
-    let mut rope = Rope::new(vec2(0.0, 100.0));
+    let mut rope = Rope::new(vec2(0.0, 100.0), 10);
     let mut enemies: Vec<Enemy> = Vec::new();
     let mut points: Vec<Point> = Vec::new();
     let mut last_spawn_time = Instant::now();
     let mut last_point_spawn_time = Instant::now();
     let mut score = 0;
+    let mut last_extended_score = 0;
 
     loop {
         let mouse_position: Vec2 = mouse_position().into();
@@ -348,7 +361,7 @@ async fn main() {
 
         draw_text(&format!("Score: {}", score), 20.0, 20.0, 30.0, WHITE);
 
-        draw_ring(&rope);
+        // draw_ring(&rope);
 
         draw_rectangle_lines(
             (screen_width() - RECTANGLE_WIDTH) / 2.,
@@ -358,6 +371,12 @@ async fn main() {
             BORDER_THICKNESS,
             BORDER_COLOR,
         );
+
+        if score % 5 == 0 && score != last_extended_score {
+            rope.extend();
+            last_extended_score = score;
+            // rope.constraint_strength += 0.1;
+        }
 
         if game_over {
             println!("Game Over! Your score is: {}", score);
