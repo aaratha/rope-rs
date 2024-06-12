@@ -1,10 +1,10 @@
 use macroquad::prelude::*;
 use macroquad::rand::gen_range;
-use std::time::{Duration, Instant};
 
-// web buid: "cargo build --release --target wasm32-unknown-unknown"
-// windows build: "cargo build --release --target x86_64-pc-windows-gnu"
+// cargo run --release
+// cargo build --release --target wasm32-unknown-unknown
 // basic-http-server target/wasm32-unknown-unknown/release
+// butler push target/wasm32-unknown-unknown/release.zip aaratha/rope:html5
 
 const ROPE_THICKNESS: f32 = 2.0;
 const ROPE_BALL_RADIUS: f32 = 7.0;
@@ -18,10 +18,10 @@ const SUBSTEPS: usize = 5;
 const LERP_FACTOR: f32 = 0.5;
 
 const ENEMY_SPEED: f32 = 7.0;
-const ENEMY_SPAWN_INTERVAL: Duration = Duration::from_secs(2);
+const ENEMY_SPAWN_INTERVAL: f32 = 2.0; // in seconds
 const ENEMY_RADIUS: f32 = 10.0;
 
-const POINT_SPAWN_INTERVAL: Duration = Duration::from_secs(1);
+const POINT_SPAWN_INTERVAL: f32 = 1.0; // in seconds
 const MAX_POINTS: usize = 20;
 const POINT_RADIUS: f32 = 5.0;
 
@@ -233,7 +233,7 @@ impl Point {
                 self.position.x,
                 self.position.y,
                 self.radius,
-                Color::new(1.0, 0.8, 5.0, 5.0),
+                Color::new(1.0, 0.8, 0.0, 1.0),
             );
         }
     }
@@ -247,28 +247,45 @@ fn check_collisions(
     game_over: &mut bool, // Pass by mutable reference
 ) {
     for _ in 0..SUBSTEPS {
-        let particle_0 = rope.particles[0];
+        let particle_0 = rope.particles[0].clone();
         for particle in rope.particles.iter_mut() {
-            for enemy in enemies.iter_mut() {
-                let dist = enemy.particle.position - particle.position;
-                let len = dist.length();
-                if len < ROPE_BALL_RADIUS + ENEMY_RADIUS {
-                    let offset = (ROPE_BALL_RADIUS + ENEMY_RADIUS - len) * dist.normalize();
-                    enemy.particle.position += offset * 0.5;
-                    particle.position -= offset * 0.5;
-                    if particle.position == particle_0.position {
-                        *game_over = true; // Dereference and modify the original game_over
-                    }
-                }
+            check_enemy_collisions_with_particle(particle, enemies, game_over, particle_0.position);
+            check_point_collisions_with_particle(particle, points, score);
+        }
+    }
+}
+
+fn check_enemy_collisions_with_particle(
+    particle: &mut Particle,
+    enemies: &mut [Enemy],
+    game_over: &mut bool,
+    player_position: Vec2,
+) {
+    for enemy in enemies.iter_mut() {
+        let dist = enemy.particle.position - particle.position;
+        let len = dist.length();
+        if len < ROPE_BALL_RADIUS + ENEMY_RADIUS {
+            let offset = (ROPE_BALL_RADIUS + ENEMY_RADIUS - len) * dist.normalize();
+            enemy.particle.position += offset * 0.5;
+            particle.position -= offset * 0.5;
+            if particle.position == player_position {
+                *game_over = true; // Dereference and modify the original game_over
             }
-            for point in points.iter_mut() {
-                let dist = point.position - particle.position;
-                let len = dist.length();
-                if len < POINT_RADIUS + ENEMY_RADIUS {
-                    point.active = false;
-                    *score += 1;
-                }
-            }
+        }
+    }
+}
+
+fn check_point_collisions_with_particle(
+    particle: &mut Particle,
+    points: &mut Vec<Point>,
+    score: &mut i32,
+) {
+    for point in points.iter_mut() {
+        let dist = point.position - particle.position;
+        let len = dist.length();
+        if len < POINT_RADIUS + ENEMY_RADIUS {
+            point.active = false;
+            *score += 1;
         }
     }
 }
@@ -309,12 +326,67 @@ async fn main() {
     let mut rope = Rope::new(vec2(0.0, 100.0), 10);
     let mut enemies: Vec<Enemy> = Vec::new();
     let mut points: Vec<Point> = Vec::new();
-    let mut last_spawn_time = Instant::now();
-    let mut last_point_spawn_time = Instant::now();
+    let mut last_spawn_time = get_time();
+    let mut last_point_spawn_time = get_time();
     let mut score = 0;
     let mut last_extended_score = 0;
 
     loop {
+        if game_over {
+            clear_background(BLACK);
+            draw_text(
+                &format!("Game Over!"),
+                screen_width() / 2. - 85.,
+                screen_height() / 2. - 50.,
+                40.,
+                WHITE,
+            );
+            draw_text(
+                &format!("Your score is: {}", score),
+                screen_width() / 2. - 140.,
+                screen_height() / 2. - 20.,
+                40.,
+                WHITE,
+            );
+            if is_mouse_button_pressed(MouseButton::Left) {
+                let mouse_position: Vec2 = mouse_position().into();
+                if mouse_position.x >= screen_width() / 2. - 100.
+                    && mouse_position.x <= screen_width() / 2. + 100.
+                    && mouse_position.y >= screen_height() / 2.
+                    && mouse_position.y <= screen_height() / 2. + 50.
+                {
+                    // Reset the game
+                    game_over = false;
+                    rope = Rope::new(vec2(0.0, 100.0), 10);
+                    enemies.clear();
+                    points.clear();
+                    score = 0;
+                    last_spawn_time = get_time();
+                    last_point_spawn_time = get_time();
+                    last_extended_score = 0;
+                }
+            }
+
+            // Draw replay button
+            draw_rectangle(
+                screen_width() / 2. - 100.,
+                screen_height() / 2.,
+                200.,
+                50.,
+                BLUE,
+            );
+            draw_text(
+                "Replay",
+                screen_width() / 2. - 50.,
+                screen_height() / 2. + 30.,
+                30.,
+                WHITE,
+            );
+
+            next_frame().await;
+            continue;
+        }
+
         let mouse_position: Vec2 = mouse_position().into();
         let target = rope.particles[0].position
             + (mouse_position - rope.particles[0].position) * LERP_FACTOR;
@@ -329,22 +401,18 @@ async fn main() {
                 &mut game_over,
             );
             check_enemy_collisions(&mut enemies);
-            for enemy in &enemies {
-                enemy.draw();
-            }
-            for point in &points {
-                point.draw();
-            }
         }
 
-        if last_spawn_time.elapsed() >= ENEMY_SPAWN_INTERVAL {
+        if get_time() - last_spawn_time >= ENEMY_SPAWN_INTERVAL as f64 {
             enemies.push(Enemy::new());
-            last_spawn_time = Instant::now();
+            last_spawn_time = get_time();
         }
 
-        if last_point_spawn_time.elapsed() >= POINT_SPAWN_INTERVAL && points.len() < MAX_POINTS {
+        if get_time() - last_point_spawn_time >= POINT_SPAWN_INTERVAL as f64
+            && points.len() < MAX_POINTS
+        {
             points.push(Point::new());
-            last_point_spawn_time = Instant::now();
+            last_point_spawn_time = get_time();
         }
 
         for enemy in &mut enemies {
@@ -360,9 +428,15 @@ async fn main() {
 
         rope.draw();
 
-        draw_text(&format!("Score: {}", score), 20.0, 20.0, 30.0, WHITE);
+        for enemy in &enemies {
+            enemy.draw();
+        }
 
-        // draw_ring(&rope);
+        for point in &points {
+            point.draw();
+        }
+
+        draw_text(&format!("Score: {}", score), 20.0, 20.0, 30.0, WHITE);
 
         draw_rectangle_lines(
             (screen_width() - RECTANGLE_WIDTH) / 2.,
@@ -379,11 +453,6 @@ async fn main() {
             if rope.constraint_strength < 1.5 {
                 rope.constraint_strength += 0.1;
             }
-        }
-
-        if game_over {
-            println!("Game Over! Your score is: {}", score);
-            break;
         }
 
         next_frame().await;
