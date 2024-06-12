@@ -28,9 +28,27 @@ const MAX_POINTS: usize = 20;
 const POINT_RADIUS: f32 = 5.0;
 
 const BORDER_THICKNESS: f32 = 5.0;
-const BORDER_COLOR: Color = Color::new(1.0, 1.0, 1.0, 1.0); // Adjust border color as needed
-const RECTANGLE_WIDTH: f32 = 1600.;
-const RECTANGLE_HEIGHT: f32 = 900.;
+const BORDER_COLOR: Color = Color::new(1.0, 1.0, 1.0, 0.0); // Adjust border color as needed
+
+#[derive(Clone, Copy)]
+struct Frame {
+    width: f32,
+    height: f32,
+}
+
+impl Frame {
+    fn new() -> Self {
+        Self {
+            width: screen_width(),
+            height: screen_height(),
+        }
+    }
+
+    fn update(&mut self) {
+        self.width = screen_width();
+        self.height = screen_height();
+    }
+}
 
 #[derive(Clone, Copy, PartialEq)]
 struct Particle {
@@ -144,31 +162,31 @@ struct Enemy {
 }
 
 impl Enemy {
-    fn new() -> Self {
+    fn new(frame: Frame) -> Self {
         let pos = if gen_range(0., 1.) > 0.5 {
             // Spawn on the left or right side of the rectangle
             Vec2::new(
                 if gen_range(0., 1.) > 0.5 {
-                    (screen_width() - RECTANGLE_WIDTH) / 2.
+                    (screen_width() - frame.width) / 2.
                 } else {
-                    (screen_width() + RECTANGLE_WIDTH) / 2.
+                    (screen_width() + frame.width) / 2.
                 },
                 rand::gen_range(
-                    (screen_height() - RECTANGLE_HEIGHT) / 2.,
-                    (screen_height() + RECTANGLE_HEIGHT) / 2.,
+                    (screen_height() - frame.height) / 2.,
+                    (screen_height() + frame.height) / 2.,
                 ),
             )
         } else {
             // Spawn on the top or bottom side of the rectangle
             Vec2::new(
                 rand::gen_range(
-                    (screen_width() - RECTANGLE_WIDTH) / 2.,
-                    (screen_width() + RECTANGLE_WIDTH) / 2.,
+                    (screen_width() - frame.width) / 2.,
+                    (screen_width() + frame.width) / 2.,
                 ),
                 if gen_range(0., 1.) > 0.5 {
-                    (screen_height() - RECTANGLE_HEIGHT) / 2.
+                    (screen_height() - frame.height) / 2.
                 } else {
-                    (screen_height() + RECTANGLE_HEIGHT) / 2.
+                    (screen_height() + frame.height) / 2.
                 },
             )
         };
@@ -179,7 +197,7 @@ impl Enemy {
         }
     }
 
-    fn update(&mut self, target: Vec2) {
+    fn update(&mut self, target: Vec2, frame: Frame) {
         let direction = target - self.particle.position;
         let distance = direction.length();
         if distance > 0.0 {
@@ -187,7 +205,7 @@ impl Enemy {
             self.particle.position += step;
         }
         self.particle.update();
-        if !is_in_frame(&self.particle) {
+        if !is_in_frame(&self.particle, frame) {
             self.active = false;
         }
     }
@@ -211,15 +229,15 @@ struct Point {
 }
 
 impl Point {
-    fn new() -> Self {
+    fn new(frame: Frame) -> Self {
         let pos = Vec2::new(
             rand::gen_range(
-                (screen_width() - RECTANGLE_WIDTH) / 2.,
-                (screen_width() + RECTANGLE_WIDTH) / 2.,
+                (screen_width() - frame.width) / 2.,
+                (screen_width() + frame.width) / 2.,
             ),
             rand::gen_range(
-                (screen_height() - RECTANGLE_HEIGHT) / 2.,
-                (screen_height() + RECTANGLE_HEIGHT) / 2.,
+                (screen_height() - frame.height) / 2.,
+                (screen_height() + frame.height) / 2.,
             ),
         );
         Self {
@@ -313,13 +331,13 @@ fn draw_ring(rope: &Rope) {
     draw_circle_lines(center.x, center.y, radius, 2.0, color); // Adjust the line thickness as needed
 }
 
-fn is_in_frame(particle: &Particle) -> bool {
+fn is_in_frame(particle: &Particle, frame: Frame) -> bool {
     let x = particle.position.x;
     let y = particle.position.y;
-    x >= (screen_width() - RECTANGLE_WIDTH) / 2.
-        && x <= (screen_width() + RECTANGLE_WIDTH) / 2.
-        && y >= (screen_height() - RECTANGLE_HEIGHT) / 2.
-        && y <= (screen_height() + RECTANGLE_HEIGHT) / 2.
+    x >= (screen_width() - frame.width) / 2.
+        && x <= (screen_width() + frame.width) / 2.
+        && y >= (screen_height() - frame.height) / 2.
+        && y <= (screen_height() + frame.height) / 2.
 }
 
 #[macroquad::main("Rope Simulation")]
@@ -332,6 +350,7 @@ async fn main() {
     let mut last_point_spawn_time = get_time();
     let mut score = 0;
     let mut last_extended_score = 0;
+    let mut frame = Frame::new();
 
     loop {
         if game_over {
@@ -406,19 +425,19 @@ async fn main() {
         }
 
         if get_time() - last_spawn_time >= ENEMY_SPAWN_INTERVAL as f64 {
-            enemies.push(Enemy::new());
+            enemies.push(Enemy::new(frame));
             last_spawn_time = get_time();
         }
 
         if get_time() - last_point_spawn_time >= POINT_SPAWN_INTERVAL as f64
             && points.len() < MAX_POINTS
         {
-            points.push(Point::new());
+            points.push(Point::new(frame));
             last_point_spawn_time = get_time();
         }
 
         for enemy in &mut enemies {
-            enemy.update(rope.particles[0].position);
+            enemy.update(rope.particles[0].position, frame);
         }
 
         for enemy in &mut enemies {
@@ -441,10 +460,10 @@ async fn main() {
         draw_text(&format!("Score: {}", score), 20.0, 20.0, 30.0, WHITE);
 
         draw_rectangle_lines(
-            (screen_width() - RECTANGLE_WIDTH) / 2.,
-            (screen_height() - RECTANGLE_HEIGHT) / 2.,
-            RECTANGLE_WIDTH,
-            RECTANGLE_HEIGHT,
+            (screen_width() - frame.width) / 2.,
+            (screen_height() - frame.height) / 2.,
+            frame.width,
+            frame.height,
             BORDER_THICKNESS,
             BORDER_COLOR,
         );
@@ -456,6 +475,7 @@ async fn main() {
                 rope.constraint_strength += 0.1;
             }
         }
+        frame.update();
 
         next_frame().await;
     }
