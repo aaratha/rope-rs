@@ -2,7 +2,8 @@ use macroquad::prelude::*;
 use macroquad::rand::gen_range;
 use std::time::{Duration, Instant};
 
-// web buid: "cargo build --target wasm32-unknown-unknown/target/release"
+// web buid: "cargo build --release --target wasm32-unknown-unknown"
+// windows build: "cargo build --release --target x86_64-pc-windows-gnu"
 // basic-http-server target/wasm32-unknown-unknown/release
 
 const ROPE_THICKNESS: f32 = 2.0;
