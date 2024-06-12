@@ -4,7 +4,9 @@ use macroquad::rand::gen_range;
 // cargo run --release
 // cargo build --release --target wasm32-unknown-unknown
 // basic-http-server target/wasm32-unknown-unknown/release
+// zip target/wasm32-unknown-unknown/release.zip -j target/wasm32-unknown-unknown/release/*
 // butler push target/wasm32-unknown-unknown/release.zip aaratha/rope:html5
+// butler status aaratha/rope:html5
 
 const ROPE_THICKNESS: f32 = 2.0;
 const ROPE_BALL_RADIUS: f32 = 7.0;
