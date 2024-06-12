@@ -26,8 +26,8 @@ const POINT_RADIUS: f32 = 5.0;
 
 const BORDER_THICKNESS: f32 = 5.0;
 const BORDER_COLOR: Color = Color::new(1.0, 1.0, 1.0, 1.0); // Adjust border color as needed
-const RECTANGLE_WIDTH: f32 = 800.;
-const RECTANGLE_HEIGHT: f32 = 600.;
+const RECTANGLE_WIDTH: f32 = 1600.;
+const RECTANGLE_HEIGHT: f32 = 900.;
 
 #[derive(Clone, Copy, PartialEq)]
 struct Particle {
@@ -375,7 +375,9 @@ async fn main() {
         if score % 5 == 0 && score != last_extended_score {
             rope.extend();
             last_extended_score = score;
-            // rope.constraint_strength += 0.1;
+            if rope.constraint_strength < 1.5 {
+                rope.constraint_strength += 0.1;
+            }
         }
 
         if game_over {
