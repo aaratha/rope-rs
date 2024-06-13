@@ -50,6 +50,37 @@ impl Frame {
     }
 }
 
+struct FpsCounter {
+    last_update: f32,
+    fps: f32,
+    fps_text: String,
+}
+
+impl FpsCounter {
+    fn new() -> Self {
+        Self {
+            last_update: 0.0,
+            fps: 0.0,
+            fps_text: String::new(),
+        }
+    }
+
+    fn update(&mut self) {
+        let current_time = get_time();
+        let elapsed_time = current_time - self.last_update as f64;
+
+        if elapsed_time >= 1.0 {
+            self.fps = get_fps() as f32;
+            self.last_update = current_time as f32;
+            self.fps_text = format!("FPS: {:.2}", self.fps);
+        }
+    }
+
+    fn draw(&self) {
+        draw_text(&self.fps_text, screen_width() - 100.0, 20.0, 20.0, WHITE);
+    }
+}
+
 #[derive(Clone, Copy, PartialEq)]
 struct Particle {
     position: Vec2,
@@ -351,8 +382,13 @@ async fn main() {
     let mut score = 0;
     let mut last_extended_score = 0;
     let mut frame = Frame::new();
+    let mut fps_counter = FpsCounter::new();
 
     loop {
+        fps_counter.update();
+
+        fps_counter.draw();
+
         if game_over {
             clear_background(BLACK);
             draw_text(
